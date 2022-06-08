@@ -1,0 +1,63 @@
+## ELK
+    # check status
+        GET /_cluster/health
+        GET _cat/shards?v=true&h=index,prirep,shard,store&s=prirep,store&bytes=gb
+        GET _cat/nodes?v=true&h=heap.current
+        GET _cat/shards?v=true
+
+## kafka
+    # kafkacat
+        [docker run --tty confluentinc/cp-kafkacat] kafkacat -b <broker:9092> {-t <topic_name>|-L}
+        kafkacat -b u-efspprb-tengrikafka-01.foms.novalocal:9093 -X security.protocol=SSL \
+            -X ssl.key.location=/tmp/logger_private-key.pem -X ssl.certificate.location=/tmp/logger_cert.pem \
+            -X ssl.ca.location=/tmp/logger_cacerts.pem -X ssl.endpoint.identification.algorithm=none \
+            -X enable.ssl.certificate.verification=false  -L
+    # topics
+        bin/kafka-topics.sh --create --zookeeper localhost:2185 --replication-factor 3 --partitions 10 --topic <name>
+        bin/kafka-topics.sh --describe --zookeeper localhost:2185 --topic <name>
+
+## keycloak
+    # add admin user
+        sudo -u keycloak /opt/keycloak-4.8.3.Final/bin/add-user-keycloak.sh --user «ADMIN» --password «PASSWORD» --realm master
+
+## oc
+    # delete
+        oc delete all,configmap --selector app=<label> -n <ns>
+        oc delete rc --field-selector=status.replicas==0 -n <ns>
+        oc delete pod --field-selector=status.phase==Succeeded -n <ns>
+        oc delete pod --field-selector=status.phase==Failed -n <ns>
+    # default pull
+        oc -n <ns> secrets link default dit-msk --for=pull
+    # scale
+        oc get dc -o name | xargs -I % oc scale % --replicas=0
+
+## openssl
+    # decrypt
+        openssl enc -aes-256-cbc -md md5 -salt -in <file> -out <file> -d
+    # encrypt
+        openssl enc -aes-256-cbc -md md5 -e -in <file>  -out <file>
+    # read certificate
+        openssl x509 -in <file.crt> -text
+
+## psql
+    # md5 users
+        SELECT '"' || rolname || '" "' || rolpassword || '"' FROM pg_authid WHERE  rolname LIKE '%_bf1' order by  rolname asc ;
+        psql -At -c "select '\"'||rolname||'\" \"'||rolpassword||'\"' from pg_authid where rolpassword is not null and rolsuper<>'t'" >/etc/pgbouncer/userlist.txt
+## step
+    # IAG
+        step ca bootstrap --ca-url https://172.26.105.72 --install --fingerprint db3b8d04a96a814da5bcf014fa7b96db9cebf0c3fe66508e95239699d4d34c0e
+        step ca certificate --not-after=8760h <type>-efs-iag.<domain> --san <type>-efs-iag-01.<domain> --san <type>-efs-iag-02.<domain> <type>-efs-iag.<domain>.crt <type>-efs-iag.<domain>.key
+        step ca root root_ca.crt
+    # Istio
+        step ca certificate --not-after=8760h <domain> --san '*.apps.ocp.<domain>' --san api.ocp.<domain> OSE.crt OSE.key
+        step ca root root_ca.crt
+        openssl pkcs12 -export -in OSE.crt -inkey OSE.key -out OSE.p12 -name <domain> -CAfile root_ca.crt -caname root
+        keytool -importkeystore -destkeystore OSE.jks -srckeystore OSE.p12 -srcstoretype pkcs12 -alias <domain>
+        keytool -import -trustcacerts -alias root -file root_ca.crt -keystore OSE.jks
+        keytool -list -keystore OSE.jks
+    # ELK
+        step ca certificate --not-after=8760h n-efs-elastic-01.minsport.novalocal n-efs-elastic-01.crt n-efs-elastic-01.key --root=root_ca.crt --kty=RSA
+        csplit -z -f n-efs-elastic-01- n-efs-elastic-01.crt '/-----BEGIN CERTIFICATE-----/' '{*}'
+        openssl pkcs12 -export -inkey n-efs-elastic-01.key -in n-efs-elastic-01.crt -certfile root_ca.crt -name minsport-nt -out n-efs-elastic-01.p12
+        keytool -importcert -keystore n-efs-elastic-01.p12 -trustcacerts -alias "gt root ca" -file root_ca.crt -storetype PKCS12
+        keytool -importcert -keystore n-efs-elastic-01.p12 -trustcacerts -alias "gt intermediate ca" -file n-efs-elastic-01-01 -storetype PKCS12
